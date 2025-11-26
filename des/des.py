@@ -408,8 +408,8 @@ class DES:
         25,
     ]
 
-    def __init__(self, key: bytes, mode: str = "CTR") -> None:
-        self.key = helpers.string_to_bits(key)
+    def __init__(self, key: str, mode: str = "CTR") -> None:
+        self.key = helpers.string_to_int(key)
         self.mode = mode
 
     def initial_permutation(self, block: int) -> int:
@@ -451,10 +451,10 @@ class DES:
             block, self.INVERSE_INITIAL_PERMUTATION_TABLE, input_width=64
         )
 
-    def feistel_network(self, data: str, round_keys: Sequence[int]) -> tuple[int, int]:
-        block = helpers.string_to_bits(data)
+    def feistel_network(self, block: bytes, round_keys: Sequence[int]) -> int:
+        block_int = int.from_bytes(block)
 
-        permuted_block = self.initial_permutation(block)
+        permuted_block = self.initial_permutation(block_int)
 
         L, R = helpers.binary_split(permuted_block, size=64)
         for round_key in round_keys:
@@ -464,10 +464,34 @@ class DES:
         preoutput = helpers.binary_join(R, L, 32)
         return self.inverse_initial_permutation(preoutput)
 
-    def encrypt_block(self, data: str) -> bytes:
+    def encrypt_block(self, block: bytes) -> int:
         round_keys = list(self.key_scheduler(self.key))
-        return self.feistel_network(data, round_keys)
+        return self.feistel_network(block, round_keys)
 
-    def decrypt_block(self, data: str) -> bytes:
+    def decrypt_block(self, block: bytes) -> int:
         round_keys = list(self.key_scheduler(self.key))
-        return self.feistel_network(data, list(reversed(round_keys)))
+        return self.feistel_network(block, list(reversed(round_keys)))
+    
+    def encrypt(self, message: str, nonce: str = "NONCE!!"):
+        block_size = 8
+        message_bytes = bytes(message, "latin1")
+        ciphertext = []
+        for i in range(0, len(message_bytes), block_size):
+            block = message_bytes[i : i + block_size]
+            nonce_bytes = bytes(nonce, "latin1")
+            encrypted_block = self.encrypt_block(nonce_bytes + i.to_bytes(1, "big"))
+            ciphertext_block = bytes([b ^ e for b, e in zip(block, encrypted_block.to_bytes(block_size, "big"))])
+            ciphertext.append(ciphertext_block.decode('latin1'))
+        return "".join(ciphertext)
+
+    def decrypt(self, ciphertext: str, nonce: str = "NONCE!!"):
+        block_size = 8
+        ciphertext_bytes = bytes(ciphertext, "latin1")
+        decrypted_message = []
+        for i in range(0, len(ciphertext_bytes), block_size):
+            block = ciphertext_bytes[i : i + block_size]
+            nonce_bytes = bytes(nonce, "latin1")
+            encrypted_block = self.encrypt_block(nonce_bytes + i.to_bytes(1, "big"))
+            decrypted_block = bytes([c ^ e for c, e in zip(block, encrypted_block.to_bytes(block_size, "big"))])
+            decrypted_message.append(decrypted_block.decode('latin1'))
+        return "".join(decrypted_message)

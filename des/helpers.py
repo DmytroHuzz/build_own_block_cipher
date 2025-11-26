@@ -1,8 +1,8 @@
 from typing import Sequence
 
 
-def string_to_bits(s: str) -> int:
-    """Convert a string to its bit representation."""
+def string_to_int(s: str) -> int:
+    """Convert a string to its int representation."""
     result = 0
     for char in s:
         result = (result << 8) | ord(char)
