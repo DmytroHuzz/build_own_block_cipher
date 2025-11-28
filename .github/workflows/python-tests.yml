@@ -1,0 +1,36 @@
+name: Python Tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # If you add requirements, uncomment:
+          # pip install -r requirements.txt
+          # pytest is needed to run tests
+          pip install pytest
+
+      - name: Run tests
+        working-directory: block_ciphers
+        run: |
+          python -m pytest -q des/test_des.py
