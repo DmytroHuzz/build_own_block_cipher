@@ -31,6 +31,5 @@ jobs:
           pip install pytest
 
       - name: Run tests
-        working-directory: block_ciphers
         run: |
           python -m pytest -q des/test_des.py

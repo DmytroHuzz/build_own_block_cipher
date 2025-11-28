@@ -452,7 +452,7 @@ class DES:
         )
 
     def feistel_network(self, block: bytes, round_keys: Sequence[int]) -> int:
-        block_int = int.from_bytes(block)
+        block_int = int.from_bytes(block, "big")
 
         permuted_block = self.initial_permutation(block_int)
 
@@ -471,7 +471,7 @@ class DES:
     def decrypt_block(self, block: bytes) -> int:
         round_keys = list(self.key_scheduler(self.key))
         return self.feistel_network(block, list(reversed(round_keys)))
-    
+
     def encrypt(self, message: str, nonce: str = "NONCE!!"):
         block_size = 8
         message_bytes = bytes(message, "latin1")
@@ -480,8 +480,13 @@ class DES:
             block = message_bytes[i : i + block_size]
             nonce_bytes = bytes(nonce, "latin1")
             encrypted_block = self.encrypt_block(nonce_bytes + i.to_bytes(1, "big"))
-            ciphertext_block = bytes([b ^ e for b, e in zip(block, encrypted_block.to_bytes(block_size, "big"))])
-            ciphertext.append(ciphertext_block.decode('latin1'))
+            ciphertext_block = bytes(
+                [
+                    b ^ e
+                    for b, e in zip(block, encrypted_block.to_bytes(block_size, "big"))
+                ]
+            )
+            ciphertext.append(ciphertext_block.decode("latin1"))
         return "".join(ciphertext)
 
     def decrypt(self, ciphertext: str, nonce: str = "NONCE!!"):
@@ -492,6 +497,11 @@ class DES:
             block = ciphertext_bytes[i : i + block_size]
             nonce_bytes = bytes(nonce, "latin1")
             encrypted_block = self.encrypt_block(nonce_bytes + i.to_bytes(1, "big"))
-            decrypted_block = bytes([c ^ e for c, e in zip(block, encrypted_block.to_bytes(block_size, "big"))])
-            decrypted_message.append(decrypted_block.decode('latin1'))
+            decrypted_block = bytes(
+                [
+                    c ^ e
+                    for c, e in zip(block, encrypted_block.to_bytes(block_size, "big"))
+                ]
+            )
+            decrypted_message.append(decrypted_block.decode("latin1"))
         return "".join(decrypted_message)
