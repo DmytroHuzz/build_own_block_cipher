@@ -68,6 +68,7 @@ pytest
 
 🔄 Example Usage
 
+```
 from des.des import DES
 
 key = b"mysecret"
@@ -86,6 +87,7 @@ Output:
 
 Encrypted: b'\x9f\xd1...\x88'
 Decrypted: b'Hello, world!'
+```
 
 ## 📚 Learning Resources
 
