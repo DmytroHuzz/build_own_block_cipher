@@ -119,7 +119,7 @@ and subscribing to the Substack for future cryptography deep dives.
 
 ## 🔗 Connect
 
-💬 LinkedIn: https://linkedin.com/in/dmytrohuz
+💬 LinkedIn: https://www.linkedin.com/in/dmitriyhuz/
 
 Cryptography becomes much less magical
 once you build it yourself.
