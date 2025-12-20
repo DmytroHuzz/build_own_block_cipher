@@ -1,5 +1,11 @@
 # Let's do exectaly that:
 def plaintext_to_state(plaintext: str) -> list[list[int]]:
+    """
+    Convert a 16‑byte plaintext block into a 4x4 AES state matrix.
+
+    The state is stored in the standard AES (FIPS‑197) layout:
+    state[row][col] = plaintext[4 * col + row]
+    """
     state = [[0 for _ in range(4)] for _ in range(4)]
     # if plaintext is bytes - skip encoding:
     if not isinstance(plaintext, bytes):
@@ -10,10 +16,23 @@ def plaintext_to_state(plaintext: str) -> list[list[int]]:
         raise ValueError(
             f"Plaintext must be 16 bytes long, {len(bytes_text)} len is given"
         )
-    for i in range(4):
-        for j in range(4):
-            state[i][j] = bytes_text[i * 4 + j]
+    # Column-major mapping: 4 * col + row
+    for col in range(4):
+        for row in range(4):
+            state[row][col] = bytes_text[4 * col + row]
     return state
+
+
+def state_to_bytes(state: list[list[int]]) -> bytes:
+    """
+    Convert a 4x4 AES state matrix back into a 16‑byte block
+    using the standard AES column‑major layout.
+    """
+    block = bytearray(16)
+    for col in range(4):
+        for row in range(4):
+            block[4 * col + row] = state[row][col] & 0xFF
+    return bytes(block)
 
 
 # AES S-box (FIPS-197) in Python-friendly format:
@@ -279,7 +298,7 @@ SBOX = [
 ]
 
 
-def sub_word(w: bytes) -> bytes:
+def sub_word(w: list[int]) -> list[int]:
     """Apply AES S-box to a 4-byte word."""
     if len(w) != 4:
         raise ValueError("sub_word expects exactly 4 bytes")
@@ -301,26 +320,51 @@ def rotword(word: list[int]) -> list[int]:
     return word[1:] + word[:1]
 
 
-def getRoundKey(key_state, round=0) -> list[list[int]]:
-    # 1. Assign the last workd of the key to the initial word
+def key_expansion(key: bytes) -> list[list[int]]:
+    """
+    Expand a 16-byte AES-128 key into 44 4-byte words.
+    """
+    if len(key) != 16:
+        raise ValueError(f"Key must be 16 bytes long, {len(key)} len is given")
 
-    # 2. Iterate 4 times to create 4 new workd
-    # On the first iteration
-    # Circular rotation
-    # Sub word
+    Nk = 4  # number of 32-bit words comprising the cipher key
+    Nb = 4  # number of columns (32-bit words) comprising the state
+    Nr = 10  # number of rounds
 
-    # XOR with Rcon[1]
-    # Create a new word by previous word XOR words[i-4]
-    # 3. Return 4 words (4*32-> 128 bits) as a round key.
-    temp = key_state[-1]
-    round_key = []
-    for i in range(4):
-        if not i and round:
+    words: list[list[int]] = []
+
+    # First Nk words come directly from the key bytes
+    for i in range(Nk):
+        words.append([key[4 * i + j] for j in range(4)])
+
+    # Remaining words are derived per FIPS-197 key schedule
+    for i in range(Nk, Nb * (Nr + 1)):
+        temp = words[i - 1][:]
+        if i % Nk == 0:
             temp = rotword(temp)
             temp = sub_word(temp)
-            temp = xor_words(temp, rcon_word(round))
-        round_key.append(xor_words(key_state[i], temp))
-        temp = round_key[-1]
+            temp = xor_words(temp, rcon_word(i // Nk))
+        words.append(xor_words(words[i - Nk], temp))
+
+    return words
+
+
+def getRoundKey(expanded_key: list[list[int]], round_index: int = 0) -> list[list[int]]:
+    """
+    Construct the 4x4 round key matrix for a given round (0..10)
+    from the expanded key words.
+    """
+    start = round_index * 4
+    round_words = expanded_key[start : start + 4]
+    if len(round_words) != 4:
+        raise ValueError("Invalid round index for expanded AES key")
+
+    round_key = [[0 for _ in range(4)] for _ in range(4)]
+    # Each word is a column in the round key; bytes are (row 0..3)
+    for col in range(4):
+        word = round_words[col]
+        for row in range(4):
+            round_key[row][col] = word[row]
     return round_key
 
 
@@ -332,20 +376,12 @@ def xor_state(state, key):
 
 
 # Let's zoom in the algorithm behind the round key scheduler:
-def addRoundKey(state, key, round=0) -> list[list[int]]:
-    # 1. Assign the last workd of the key to the initial word
-
-    # 2. Iterate 4 times to create 4 new workd
-    # On the first iteration
-    # Circular rotation
-    # Sub word
-
-    # XOR with Rcon[1]
-    # Create a new word by previous word XOR words[i-4]
-    # 3. Return 4 words (4*32-> 128 bits) as a round key.
-    round_key = getRoundKey(key, round)
+def addRoundKey(state, round_key) -> list[list[int]]:
+    """
+    XOR the state with a 4x4 round key matrix.
+    """
     state = xor_state(state, round_key)
-    return state, round_key
+    return state
 
 
 def shift_rows(state):
@@ -475,25 +511,25 @@ def aes(plaintext: str, key: bytes) -> bytes:
 
     # 7. The final round key
     state = plaintext_to_state(plaintext)
-    key = plaintext_to_state(key)
+    expanded_key = key_expansion(key)
 
-    state, key = addRoundKey(state, key, round=0)
+    # Initial round (round 0) – XOR with original cipher key
+    state = addRoundKey(state, getRoundKey(expanded_key, 0))
+
+    # Rounds 1..9
     for round in range(1, 10):
         state = sub_bytes(state)
         state = shift_rows(state)
         state = mix_columns(state)
-        state, key = addRoundKey(state, key, round)
-    # Final round (no MixColumns)
+        state = addRoundKey(state, getRoundKey(expanded_key, round))
+
+    # Final round (no MixColumns), round 10
     state = sub_bytes(state)
     state = shift_rows(state)
-    state, key = addRoundKey(state, key, round=10)
+    state = addRoundKey(state, getRoundKey(expanded_key, 10))
+
     # Convert state back to bytes
-    ciphertext_bytes = bytearray(16)
-    for i in range(4):
-        for j in range(4):
-            ciphertext_bytes[i * 4 + j] = state[i][j]
-    ciphertext = bytes(ciphertext_bytes)
-    return ciphertext
+    return state_to_bytes(state)
 
 
 if __name__ == "__main__":
@@ -504,4 +540,45 @@ if __name__ == "__main__":
     print("Ciphertext (hex):", ciphertext.hex())
     # Expected output: 29c3505f571420f6402299b31a02d73a
     assert ciphertext.hex() == "29c3505f571420f6402299b31a02d73a"
-    print("AES encryption successful!")
+    print("AES encryption successful (example vector)!")
+
+    # Additional AES-128 test vectors (NIST-style, hex)
+    test_vectors: list[tuple[bytes, bytes, str]] = [
+        # FIPS-197 C.1: key 000102...0f, plaintext 001122...ff
+        (
+            bytes.fromhex("000102030405060708090a0b0c0d0e0f"),
+            bytes.fromhex("00112233445566778899aabbccddeeff"),
+            "69c4e0d86a7b0430d8cdb78070b4c55a",
+        ),
+        # Rijndael/AES example: key 2b7e15..., plaintext 3243f6...
+        (
+            bytes.fromhex("2b7e151628aed2a6abf7158809cf4f3c"),
+            bytes.fromhex("3243f6a8885a308d313198a2e0370734"),
+            "3925841d02dc09fbdc118597196a0b32",
+        ),
+        # All-zero key, all-zero plaintext
+        (
+            bytes.fromhex("00000000000000000000000000000000"),
+            bytes.fromhex("00000000000000000000000000000000"),
+            "66e94bd4ef8a2c3b884cfa59ca342b2e",
+        ),
+        # NIST SP 800-38A AES-128-ECB, block 1
+        (
+            bytes.fromhex("2b7e151628aed2a6abf7158809cf4f3c"),
+            bytes.fromhex("6bc1bee22e409f96e93d7e117393172a"),
+            "3ad77bb40d7a3660a89ecaf32466ef97",
+        ),
+        # NIST SP 800-38A AES-128-ECB, block 2
+        (
+            bytes.fromhex("2b7e151628aed2a6abf7158809cf4f3c"),
+            bytes.fromhex("ae2d8a571e03ac9c9eb76fac45af8e51"),
+            "f5d3d58503b9699de785895a96fdbaaf",
+        ),
+    ]
+
+    for idx, (k, pt, expected_hex) in enumerate(test_vectors, start=1):
+        ct = aes(pt, k)
+        print(f"Test vector {idx} ciphertext (hex):", ct.hex())
+        assert ct.hex() == expected_hex
+
+    print("All AES test vectors passed!")
