@@ -301,7 +301,7 @@ def rotword(word: list[int]) -> list[int]:
     return word[1:] + word[:1]
 
 
-def getRoundKey(key, round=0) -> list[list[int]]:
+def getRoundKey(key_state, round=0) -> list[list[int]]:
     # 1. Assign the last workd of the key to the initial word
 
     # 2. Iterate 4 times to create 4 new workd
@@ -312,15 +312,13 @@ def getRoundKey(key, round=0) -> list[list[int]]:
     # XOR with Rcon[1]
     # Create a new word by previous word XOR words[i-4]
     # 3. Return 4 words (4*32-> 128 bits) as a round key.
-    key_state = plaintext_to_state(key)
     temp = key_state[-1]
     round_key = []
     for i in range(4):
-        if not i:
+        if not i and round:
             temp = rotword(temp)
             temp = sub_word(temp)
-            if round:
-                temp = xor_words(temp, rcon_word(round))
+            temp = xor_words(temp, rcon_word(round))
         round_key.append(xor_words(key_state[i], temp))
         temp = round_key[-1]
     return round_key
@@ -347,7 +345,7 @@ def addRoundKey(state, key, round=0) -> list[list[int]]:
     # 3. Return 4 words (4*32-> 128 bits) as a round key.
     round_key = getRoundKey(key, round)
     state = xor_state(state, round_key)
-    return state
+    return state, round_key
 
 
 def shift_rows(state):
@@ -477,16 +475,18 @@ def aes(plaintext: str, key: bytes) -> bytes:
 
     # 7. The final round key
     state = plaintext_to_state(plaintext)
-    state = addRoundKey(state, key, round=0)
+    key = plaintext_to_state(key)
+
+    state, key = addRoundKey(state, key, round=0)
     for round in range(1, 10):
         state = sub_bytes(state)
         state = shift_rows(state)
         state = mix_columns(state)
-        state = addRoundKey(state, key, round)
+        state, key = addRoundKey(state, key, round)
     # Final round (no MixColumns)
     state = sub_bytes(state)
     state = shift_rows(state)
-    state = addRoundKey(state, key, round=10)
+    state, key = addRoundKey(state, key, round=10)
     # Convert state back to bytes
     ciphertext_bytes = bytearray(16)
     for i in range(4):
