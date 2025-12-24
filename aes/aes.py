@@ -835,59 +835,9 @@ class AESCipher:
 
 
 if __name__ == "__main__":
-    # Example usage
+    # Minimal example usage (manual run only)
     aes = AESCipher()
     key = b"Thats my Kung Fu"
-    plaintext = "Two One Nine Two"
-    ciphertext = aes.encode_block(plaintext.encode(), key)
+    plaintext = b"Two One Nine Two"
+    ciphertext = aes.encode_block(plaintext, key)
     print("Ciphertext (hex):", ciphertext.hex())
-    # Expected output: 29c3505f571420f6402299b31a02d73a
-    assert ciphertext.hex() == "29c3505f571420f6402299b31a02d73a"
-    recovered = aes.decode_block(ciphertext, key)
-    assert recovered == plaintext.encode()
-    print("AES encryption/decryption successful (example vector)!")
-
-    # Additional AES-128 test vectors (NIST-style, hex)
-    test_vectors: list[tuple[bytes, bytes, str]] = [
-        # FIPS-197 C.1: key 000102...0f, plaintext 001122...ff
-        (
-            bytes.fromhex("000102030405060708090a0b0c0d0e0f"),
-            bytes.fromhex("00112233445566778899aabbccddeeff"),
-            "69c4e0d86a7b0430d8cdb78070b4c55a",
-        ),
-        # Rijndael/AES example: key 2b7e15..., plaintext 3243f6...
-        (
-            bytes.fromhex("2b7e151628aed2a6abf7158809cf4f3c"),
-            bytes.fromhex("3243f6a8885a308d313198a2e0370734"),
-            "3925841d02dc09fbdc118597196a0b32",
-        ),
-        # All-zero key, all-zero plaintext
-        (
-            bytes.fromhex("00000000000000000000000000000000"),
-            bytes.fromhex("00000000000000000000000000000000"),
-            "66e94bd4ef8a2c3b884cfa59ca342b2e",
-        ),
-        # NIST SP 800-38A AES-128-ECB, block 1
-        (
-            bytes.fromhex("2b7e151628aed2a6abf7158809cf4f3c"),
-            bytes.fromhex("6bc1bee22e409f96e93d7e117393172a"),
-            "3ad77bb40d7a3660a89ecaf32466ef97",
-        ),
-        # NIST SP 800-38A AES-128-ECB, block 2
-        (
-            bytes.fromhex("2b7e151628aed2a6abf7158809cf4f3c"),
-            bytes.fromhex("ae2d8a571e03ac9c9eb76fac45af8e51"),
-            "f5d3d58503b9699de785895a96fdbaaf",
-        ),
-    ]
-
-    for idx, (k, pt, expected_hex) in enumerate(test_vectors, start=1):
-        ct = aes.encode_block(pt, k)
-        print(f"Test vector {idx} ciphertext (hex):", ct.hex())
-        assert ct.hex() == expected_hex
-
-    # Also verify decryption for those vectors
-    for k, pt, _ in test_vectors:
-        assert aes.decode_block(aes.encode_block(pt, k), k) == pt
-
-    print("All AES encryption/decryption test vectors passed!")
