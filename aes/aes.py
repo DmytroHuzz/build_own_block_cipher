@@ -25,16 +25,6 @@ class AESCipher:
                 block[4 * col + row] = state[row][col] & 0xFF
         return bytes(block)
 
-    def plaintext_to_state(self, plaintext) -> list[list[int]]:
-        """
-        Helper that accepts text or raw 16‑byte data and forwards to block_to_state.
-        """
-        if not isinstance(plaintext, bytes):
-            bytes_text = plaintext.encode("utf-8")
-        else:
-            bytes_text = plaintext
-        return self.block_to_state(bytes_text)
-
     # AES S-box (FIPS-197) in Python-friendly format:
     # SBOX[x] gives the substituted byte for input byte x (0..255).
 
@@ -297,6 +287,11 @@ class AESCipher:
         22,
     ]
 
+    # Inverse S-box, computed from SBOX
+    INV_SBOX = [0] * 256
+    for i, v in enumerate(SBOX):
+        INV_SBOX[v] = i
+
     def sub_word(self, w: list[int]) -> list[int]:
         """Apply AES S-box to a 4-byte word."""
         if len(w) != 4:
@@ -381,6 +376,15 @@ class AESCipher:
         state[3] = state[3][3:] + state[3][:3]
         return state
 
+    def inv_shift_rows(self, state):
+        """
+        Inverse of AES ShiftRows step.
+        """
+        state[1] = state[1][-1:] + state[1][:-1]
+        state[2] = state[2][-2:] + state[2][:-2]
+        state[3] = state[3][-3:] + state[3][:-3]
+        return state
+
     def xtime(self, x: int) -> int:
         """
         Multiply a byte by 2 in AES finite field GF(2^8).
@@ -393,6 +397,31 @@ class AESCipher:
             return ((x << 1) ^ 0x1B) & 0xFF
         else:
             return (x << 1) & 0xFF
+
+    # Helpers for inverse MixColumns (multiplication by constants in GF(2^8)):
+    def mul_by_9(self, x: int) -> int:
+        x2 = self.xtime(x)
+        x4 = self.xtime(x2)
+        x8 = self.xtime(x4)
+        return x8 ^ x
+
+    def mul_by_11(self, x: int) -> int:
+        x2 = self.xtime(x)
+        x4 = self.xtime(x2)
+        x8 = self.xtime(x4)
+        return x8 ^ x2 ^ x
+
+    def mul_by_13(self, x: int) -> int:
+        x2 = self.xtime(x)
+        x4 = self.xtime(x2)
+        x8 = self.xtime(x4)
+        return x8 ^ x4 ^ x
+
+    def mul_by_14(self, x: int) -> int:
+        x2 = self.xtime(x)
+        x4 = self.xtime(x2)
+        x8 = self.xtime(x4)
+        return x8 ^ x4 ^ x2
 
     def mix_single_column(self, col: list[int]) -> list[int]:
         """
@@ -446,6 +475,47 @@ class AESCipher:
             b3 & 0xFF,
         ]
 
+    def inv_mix_single_column(self, col: list[int]) -> list[int]:
+        """
+        Inverse AES MixColumns on ONE column.
+        """
+        if len(col) != 4:
+            raise ValueError("inv_mix_single_column expects exactly 4 bytes")
+
+        a0, a1, a2, a3 = (c & 0xFF for c in col)
+
+        b0 = (
+            self.mul_by_14(a0)
+            ^ self.mul_by_11(a1)
+            ^ self.mul_by_13(a2)
+            ^ self.mul_by_9(a3)
+        )
+        b1 = (
+            self.mul_by_9(a0)
+            ^ self.mul_by_14(a1)
+            ^ self.mul_by_11(a2)
+            ^ self.mul_by_13(a3)
+        )
+        b2 = (
+            self.mul_by_13(a0)
+            ^ self.mul_by_9(a1)
+            ^ self.mul_by_14(a2)
+            ^ self.mul_by_11(a3)
+        )
+        b3 = (
+            self.mul_by_11(a0)
+            ^ self.mul_by_13(a1)
+            ^ self.mul_by_9(a2)
+            ^ self.mul_by_14(a3)
+        )
+
+        return [
+            b0 & 0xFF,
+            b1 & 0xFF,
+            b2 & 0xFF,
+            b3 & 0xFF,
+        ]
+
     def mix_columns(self, state: list[list[int]]) -> list[list[int]]:
         """
         Perform AES MixColumns on the FULL 4x4 AES state.
@@ -472,10 +542,31 @@ class AESCipher:
 
         return state
 
+    def inv_mix_columns(self, state: list[list[int]]) -> list[list[int]]:
+        """
+        Inverse AES MixColumns on the FULL 4x4 AES state.
+        """
+        if len(state) != 4 or any(len(row) != 4 for row in state):
+            raise ValueError("state must be a 4x4 matrix")
+
+        for c in range(4):
+            column = [state[r][c] for r in range(4)]
+            mixed_column = self.inv_mix_single_column(column)
+            for r in range(4):
+                state[r][c] = mixed_column[r]
+
+        return state
+
     def sub_bytes(self, state: list[list[int]]) -> list[list[int]]:
         for i in range(4):
             for j in range(4):
                 state[i][j] = self.SBOX[state[i][j]]
+        return state
+
+    def inv_sub_bytes(self, state: list[list[int]]) -> list[list[int]]:
+        for i in range(4):
+            for j in range(4):
+                state[i][j] = self.INV_SBOX[state[i][j]]
         return state
 
     def encode_block(self, block: bytes, key: bytes) -> bytes:
@@ -514,6 +605,32 @@ class AESCipher:
         # Convert state back to bytes
         return self.state_to_bytes(state)
 
+    def decode_block(self, block: bytes, key: bytes) -> bytes:
+        """
+        Decrypt a single 16-byte AES-128 block with the given key.
+        """
+        state = self.block_to_state(block)
+
+        # Materialize all round key states (0..10) and copy them to avoid aliasing
+        round_keys = [[row[:] for row in rk] for rk in self.key_schedule_generator(key)]
+
+        # Initial AddRoundKey with last round key (round 10)
+        state = self.addRoundKey(state, round_keys[10])
+
+        # Rounds 9..1
+        for round_index in range(9, 0, -1):
+            state = self.inv_shift_rows(state)
+            state = self.inv_sub_bytes(state)
+            state = self.addRoundKey(state, round_keys[round_index])
+            state = self.inv_mix_columns(state)
+
+        # Final round (round 0): no MixColumns
+        state = self.inv_shift_rows(state)
+        state = self.inv_sub_bytes(state)
+        state = self.addRoundKey(state, round_keys[0])
+
+        return self.state_to_bytes(state)
+
 
 if __name__ == "__main__":
     # Example usage
@@ -524,7 +641,9 @@ if __name__ == "__main__":
     print("Ciphertext (hex):", ciphertext.hex())
     # Expected output: 29c3505f571420f6402299b31a02d73a
     assert ciphertext.hex() == "29c3505f571420f6402299b31a02d73a"
-    print("AES encryption successful (example vector)!")
+    recovered = aes.decode_block(ciphertext, key)
+    assert recovered == plaintext.encode()
+    print("AES encryption/decryption successful (example vector)!")
 
     # Additional AES-128 test vectors (NIST-style, hex)
     test_vectors: list[tuple[bytes, bytes, str]] = [
@@ -565,4 +684,8 @@ if __name__ == "__main__":
         print(f"Test vector {idx} ciphertext (hex):", ct.hex())
         assert ct.hex() == expected_hex
 
-    print("All AES test vectors passed!")
+    # Also verify decryption for those vectors
+    for k, pt, _ in test_vectors:
+        assert aes.decode_block(aes.encode_block(pt, k), k) == pt
+
+    print("All AES encryption/decryption test vectors passed!")
