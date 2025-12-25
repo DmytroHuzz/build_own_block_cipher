@@ -93,3 +93,31 @@ def test_aes_standard_vectors_roundtrip():
         ct = aes.encode_block(pt, key)
         recovered = aes.decode_block(ct, key)
         assert recovered == pt
+
+
+def test_aes_ctr_roundtrip_basic():
+    aes = AESCipher()
+    key = b"\x00" * 16
+    nonce = b"12345678"  # 8-byte nonce
+    plaintext = b"CTR mode test payload!"
+
+    ciphertext = aes.encode(plaintext, key, nonce)
+    assert ciphertext != plaintext
+
+    recovered = aes.decode(ciphertext, key, nonce)
+    assert recovered == plaintext
+
+
+def test_aes_ctr_roundtrip_non_block_aligned():
+    aes = AESCipher()
+    key = b"\x01" * 16
+    nonce = b"87654321"
+    # Length not multiple of 16
+    plaintext = b"Short and not aligned to block size"
+
+    ciphertext = aes.encode(plaintext, key, nonce)
+    assert len(ciphertext) == len(plaintext)
+    assert ciphertext != plaintext
+
+    recovered = aes.decode(ciphertext, key, nonce)
+    assert recovered == plaintext

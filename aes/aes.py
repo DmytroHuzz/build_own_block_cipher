@@ -833,6 +833,81 @@ class AESCipher:
 
         return self.state_to_bytes(state)
 
+    def encode(self, data: bytes, key: bytes, nonce: bytes) -> bytes:
+        """
+        Encrypt data using AES-128 in CTR (Counter) mode.
+
+        Description:
+        - Turns the block cipher encode_block() into a stream cipher.
+        - Generates a keystream by encrypting successive counter blocks and XORs
+          it with the plaintext bytes.
+        - Encryption and decryption are the same operation in CTR mode.
+
+        Parameters:
+        - data: arbitrary-length plaintext or ciphertext.
+        - key: 16-byte AES-128 key.
+        - nonce: 8-byte nonce. The internal 16-byte counter block is:
+            counter_block = nonce || counter64_be
+          where counter64_be starts at 0 and increments by 1 for each block.
+
+        High-level algorithm:
+        - Ensure len(nonce) == 8 and len(key) == 16.
+        - For block index i = 0,1,2,...:
+            - counter_block = nonce || i.to_bytes(8, "big").
+            - keystream_block = encode_block(counter_block, key).
+            - XOR keystream_block with data[i*16 : i*16+16] (truncate last block).
+        - Concatenate all XORed chunks and return as bytes.
+        """
+        if len(key) != 16:
+            raise ValueError(f"Key must be 16 bytes long, {len(key)} len is given")
+        if len(nonce) != 8:
+            raise ValueError(f"Nonce must be 8 bytes long, {len(nonce)} len is given")
+
+        if not data:
+            return b""
+
+        ciphertext = bytearray(len(data))
+        block_size = 16
+        num_blocks = (len(data) + block_size - 1) // block_size
+
+        for i in range(num_blocks):
+            counter_block = nonce + i.to_bytes(8, "big")
+            keystream = self.encode_block(counter_block, key)
+
+            start = i * block_size
+            end = min(start + block_size, len(data))
+            chunk = data[start:end]
+
+            for j, b in enumerate(chunk):
+                ciphertext[start + j] = b ^ keystream[j]
+
+        return bytes(ciphertext)
+
+    def decode(self, data: bytes, key: bytes, nonce: bytes) -> bytes:
+        """
+        Decrypt data using AES-128 in CTR mode.
+
+        Intuition / why this calls encode():
+        - In CTR mode we never apply the block cipher directly to the plaintext.
+          Instead we:
+            keystream_block = AES_encrypt(counter_block, key)
+            ciphertext_block = plaintext_block XOR keystream_block
+        - Decryption reverses this by XORing with the *same* keystream:
+            plaintext_block = ciphertext_block XOR keystream_block
+        - Since XOR is its own inverse (x XOR k XOR k == x), using the same
+          keystream generator for both directions is sufficient.
+
+        Visual identity per byte:
+            C = P ⊕ K
+            P = C ⊕ K
+        So the operation "⊕ K" is both the encrypt and decrypt step.
+
+        This method:
+        - Reuses encode() to generate the identical keystream and XOR it with
+          `data`, regardless of whether `data` is plaintext or ciphertext.
+        """
+        return self.encode(data, key, nonce)
+
 
 if __name__ == "__main__":
     # Minimal example usage (manual run only)
