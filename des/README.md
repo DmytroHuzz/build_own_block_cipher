@@ -93,14 +93,14 @@ Decrypted: b'Hello, world!'
 
 📌 Article Series: Building Cryptography LEGO Bricks
 Part 1 — Building Your Own Block Cipher: Part 1 — Block Cipher Theory & Rebuilding DES
-https://dmytrohuz.substack.com/p/building-your-own-block-cipher-part
+https://www.softwareinthegrid.com/p/building-your-own-block-cipher-part
 
 📌 Previous Article: Building Own Block Cipher: Part 0 Lego Bricks of Modern Security
-https://dmytrohuz.substack.com/p/building-cryptography-lego-bricks
+https://www.softwareinthegrid.com/p/building-cryptography-lego-bricks
 
 ## 🚧 Roadmap
 
-If you’d like to see AES built from scratch → open an issue or comment on the Substack article 💬
+If you’d like to discuss the AES follow-up, open an issue or continue with the article series on Software in the Grid.
 
 ## 🤝 Contributing
 
@@ -115,7 +115,7 @@ This implementation is for education & research only.
 ## ⭐ If you enjoy this project…
 
 …consider giving the repository a star 🌟
-and subscribing to the Substack for future cryptography deep dives.
+and following [Software in the Grid](https://www.softwareinthegrid.com/) for future cryptography and software-foundations deep dives.
 
 ## 🔗 Connect
 

@@ -101,17 +101,17 @@ directly on 16‑byte blocks.
 ## 📚 Learning Resources
 
 📌 Article: Building Your Own Block Cipher — Part 3 (AES)  
-https://dmytrohuz.substack.com/p/building-own-block-cipher-part-3
+https://www.softwareinthegrid.com/p/building-own-block-cipher-part-3
 
 📌 Series Index / Rest of Articles  
-https://dmytrohuz.substack.com/p/rebuilding-cryptography-from-scratch
+https://www.softwareinthegrid.com/p/rebuilding-cryptography-from-scratch
 
 For the DES part of this project and earlier theory:
 
 - Part 2 — Block Cipher Theory & Rebuilding DES  
-  https://dmytrohuz.substack.com/p/building-your-own-block-cipher-part
+  https://www.softwareinthegrid.com/p/building-your-own-block-cipher-part
 - Part 1 — Lego Bricks of Modern Security  
-  https://dmytrohuz.substack.com/p/building-cryptography-lego-bricks
+  https://www.softwareinthegrid.com/p/building-cryptography-lego-bricks
 
 ## 🛡️ Disclaimer
 
@@ -121,4 +121,4 @@ Do **not** use it as a drop‑in replacement for production‑grade cryptographi
 ## ⭐ If you enjoy this project…
 
 …consider giving the repository a star 🌟  
-and following the article series for future cryptography deep dives.
+and following [Software in the Grid](https://www.softwareinthegrid.com/) for future cryptography and software-foundations deep dives.
